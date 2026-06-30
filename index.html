@@ -291,9 +291,12 @@
   }
   .code-line{
     display:flex;
+    align-items:flex-start;
     white-space:pre;
     border-left:3px solid transparent;
     padding-left:9px;
+    padding-right:8px;
+    position:relative;
   }
   .code-line .gutter{
     user-select:none;
@@ -303,7 +306,30 @@
     text-align:right;
     margin-right:14px;
   }
+  .code-line .code-text{ flex:1; }
+  .code-line .line-copy{
+    flex:none;
+    margin-left:14px;
+    border:1px solid var(--line);
+    background:var(--bg-raised);
+    color:var(--text-dim);
+    border-radius:6px;
+    width:22px; height:22px;
+    line-height:1;
+    font-size:12px;
+    padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    opacity:0;
+    transform:translateY(-1px);
+    position:sticky;
+    right:6px;
+    transition:opacity .12s ease, border-color .12s ease, color .12s ease;
+  }
+  .code-line:hover .line-copy,
+  .code-line .line-copy:focus-visible{ opacity:1; }
+  .code-line .line-copy:hover{ border-color:color-mix(in srgb, var(--ember) 55%, var(--line)); color:var(--ember); }
   .code-line.match{ background:color-mix(in srgb, var(--gold) 16%, transparent); }
+  .code-line.copied{ background:color-mix(in srgb, var(--teal) 18%, transparent); }
   .str{ color:var(--teal); }
   .key{ color:var(--amber); }
   .num{ color:var(--violet); }
@@ -330,6 +356,24 @@
   .tkey{ color:var(--amber); cursor:pointer; border-radius:4px; }
   .tkey:hover{ background:color-mix(in srgb, var(--amber) 18%, transparent); }
   .tcount{ color:var(--text-faint); font-size:11.5px; }
+  .tcopy{
+    border:1px solid var(--line);
+    background:var(--bg-raised);
+    color:var(--text-dim);
+    border-radius:6px;
+    width:20px; height:20px;
+    line-height:1;
+    font-size:11px;
+    padding:0;
+    display:inline-flex; align-items:center; justify-content:center;
+    opacity:0;
+    margin-left:4px;
+    transition:opacity .12s ease, border-color .12s ease, color .12s ease;
+  }
+  details.node > summary:hover .tcopy,
+  .leaf:hover .tcopy,
+  .tcopy:focus-visible{ opacity:1; }
+  .tcopy:hover{ border-color:color-mix(in srgb, var(--ember) 55%, var(--line)); color:var(--ember); }
   .tval-str{ color:var(--teal); }
   .tval-num{ color:var(--violet); }
   .tval-bool{ color:var(--ember); }
@@ -604,21 +648,98 @@
     return indentUnit > 0 ? Math.floor(spaces / indentUnit) : 0;
   }
 
-  function renderFormatted(text, indentUnit, query){
-    const lines = text.split('\n');
+  // Walks the parsed value (not the text) so every line can carry the exact
+  // key/value it represents, which is what makes per-line "copy" possible.
+  function buildFormattedLines(value, indentUnit){
+    const indentStr = indentUnit === 'tab' ? '\t' : ' '.repeat(indentUnit);
+    const ind = (depth) => indentStr.repeat(depth);
+    const lines = [];
+    const push = (text, depth, copyKey, copyValue) => lines.push({ text, depth, copyKey, copyValue });
+
+    function walk(v, depth, key, isLast){
+      const prefix = ind(depth);
+      const keyPrefix = key !== null ? JSON.stringify(key) + ': ' : '';
+      if (v !== null && typeof v === 'object') {
+        const isArr = Array.isArray(v);
+        const entries = isArr ? v.map((x,i) => [i,x]) : Object.entries(v);
+        const open = isArr ? '[' : '{', close = isArr ? ']' : '}';
+        if (entries.length === 0) {
+          push(`${prefix}${keyPrefix}${open}${close}${isLast?'':','}`, depth, key, v);
+          return;
+        }
+        push(`${prefix}${keyPrefix}${open}`, depth, key, v);
+        entries.forEach(([k, val], i) => walk(val, depth+1, isArr ? null : k, i === entries.length-1));
+        push(`${prefix}${close}${isLast?'':','}`, depth, null, undefined);
+      } else {
+        push(`${prefix}${keyPrefix}${JSON.stringify(v)}${isLast?'':','}`, depth, key, v);
+      }
+    }
+    walk(value, 0, null, true);
+    return lines;
+  }
+
+  function snippetFor(indentUnit, key, value){
+    const space = indentUnit === 'tab' ? '\t' : (indentUnit || 2);
+    const valText = JSON.stringify(value, null, space);
+    return (key !== null && key !== undefined) ? `${JSON.stringify(key)}: ${valText}` : valText;
+  }
+
+  let lineCopySnippets = [];
+
+  function renderFormatted(indentUnit, query){
     const q = (query || '').trim().toLowerCase();
+    lineCopySnippets = [];
+
+    // Minified output (or nothing parsed yet) has no meaningful per-line
+    // structure to attach a copy button to — fall back to a flat view.
+    if (indentUnit === 0 || currentValue === null) {
+      const text = currentFormatted || '';
+      let html = '';
+      text.split('\n').forEach((raw, idx) => {
+        const tokenized = syntaxTokenize(escapeHtml(raw));
+        const isMatch = q && raw.toLowerCase().includes(q);
+        html += `<div class="code-line${isMatch ? ' match':''}">` +
+                `<span class="gutter">${idx+1}</span><span class="code-text">${tokenized || '&nbsp;'}</span></div>`;
+      });
+      formattedView.innerHTML = html;
+      return;
+    }
+
+    const lines = buildFormattedLines(currentValue, indentUnit);
     let html = '';
-    lines.forEach((raw, idx) => {
-      const escaped = escapeHtml(raw);
-      const tokenized = syntaxTokenize(escaped);
-      const depth = indentDepthOf(raw, indentUnit);
-      const color = DEPTH_COLORS[depth % DEPTH_COLORS.length];
-      const isMatch = q && raw.toLowerCase().includes(q);
-      html += `<div class="code-line${isMatch ? ' match':''}" style="border-left-color:${depth ? color : 'transparent'}">` +
-              `<span class="gutter">${idx+1}</span><span>${tokenized || '&nbsp;'}</span></div>`;
+    lines.forEach((line, idx) => {
+      const tokenized = syntaxTokenize(escapeHtml(line.text));
+      const color = DEPTH_COLORS[line.depth % DEPTH_COLORS.length];
+      const isMatch = q && line.text.toLowerCase().includes(q);
+      let copyBtn = '';
+      if (line.copyValue !== undefined) {
+        const snippetIdx = lineCopySnippets.length;
+        lineCopySnippets.push(snippetFor(indentUnit, line.copyKey, line.copyValue));
+        const label = (line.copyKey !== null && line.copyKey !== undefined)
+          ? `Copy "${line.copyKey}" as JSON` : 'Copy this value as JSON';
+        copyBtn = `<button class="line-copy" data-snippet-idx="${snippetIdx}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}">⧉</button>`;
+      }
+      html += `<div class="code-line${isMatch ? ' match':''}" style="border-left-color:${line.depth ? color : 'transparent'}">` +
+              `<span class="gutter">${idx+1}</span><span class="code-text">${tokenized || '&nbsp;'}</span>${copyBtn}</div>`;
     });
     formattedView.innerHTML = html;
   }
+
+  formattedView.addEventListener('click', (e) => {
+    const btn = e.target.closest('.line-copy');
+    if (!btn) return;
+    const idx = parseInt(btn.dataset.snippetIdx, 10);
+    const snippet = lineCopySnippets[idx];
+    if (snippet === undefined) return;
+    navigator.clipboard.writeText(snippet).then(() => {
+      showToast('Copied as JSON');
+      const line = btn.closest('.code-line');
+      if (line) {
+        line.classList.add('copied');
+        setTimeout(() => line.classList.remove('copied'), 500);
+      }
+    });
+  });
 
   // ---------- tree view ----------
   function pathSegment(seg){
@@ -645,6 +766,23 @@
         navigator.clipboard.writeText(fullPath).then(() => showToast('Path copied: ' + fullPath));
       });
       return span;
+    }
+
+    function makeCopyButton(key, val){
+      const btn = document.createElement('button');
+      btn.className = 'tcopy';
+      btn.type = 'button';
+      btn.textContent = '⧉';
+      const label = (key !== null && key !== undefined && key !== 'root')
+        ? `Copy "${key}" as JSON` : 'Copy this value as JSON';
+      btn.title = label;
+      btn.setAttribute('aria-label', label);
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const snippet = snippetFor(getIndentUnit(), (key === 'root' ? null : key), val);
+        navigator.clipboard.writeText(snippet).then(() => showToast('Copied as JSON'));
+      });
+      return btn;
     }
 
     function renderValueInline(v){
@@ -681,6 +819,7 @@
         bracket.className = 'tcount';
         bracket.textContent = (isArr ? `Array(${entries.length})` : `Object{${entries.length}}`);
         summary.appendChild(bracket);
+        summary.appendChild(makeCopyButton(key, val));
         details.appendChild(summary);
         parent.appendChild(details);
         entries.forEach(([k,v]) => {
@@ -693,6 +832,7 @@
         row.className = 'leaf';
         row.appendChild(makeKeySpan(String(key) + ':', fullPath));
         row.appendChild(renderValueInline(val));
+        row.appendChild(makeCopyButton(key, val));
         parent.appendChild(row);
       }
     }
@@ -782,7 +922,7 @@
       currentFormatted = formatted;
       lastValidText = text;
 
-      renderFormatted(formatted, indentUnit, searchInput.value);
+      renderFormatted(indentUnit, searchInput.value);
       buildTree(value, treeRoot, 'root', searchInput.value);
       renderStats(value, formatted);
 
@@ -806,7 +946,7 @@
   sortKeysBox.addEventListener('change', process);
   escapeModeBox.addEventListener('change', process);
   searchInput.addEventListener('input', debounce(() => {
-    renderFormatted(currentFormatted || '', getIndentUnit(), searchInput.value);
+    renderFormatted(getIndentUnit(), searchInput.value);
     if (currentValue !== null) buildTree(currentValue, treeRoot, 'root', searchInput.value);
   }, 150));
 
