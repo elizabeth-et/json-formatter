@@ -141,9 +141,7 @@
   .workspace{
     flex:1;
     display:grid;
-    grid-template-columns:1fr 1fr;
-    gap:1px;
-    background:var(--line);
+    grid-template-columns:1fr 7px 1fr;
     min-height:0;
   }
   .pane{
@@ -151,6 +149,52 @@
     display:flex;
     flex-direction:column;
     min-height:0;
+    min-width:0;
+    overflow:hidden;
+  }
+
+  /* ---------- Resizer ---------- */
+  .resizer{
+    position:relative;
+    width:7px;
+    cursor:col-resize;
+    background:var(--line);
+    touch-action:none;
+  }
+  .resizer::before{
+    content:'';
+    position:absolute;
+    top:0; bottom:0;
+    left:50%; transform:translateX(-50%);
+    width:3px;
+    border-radius:3px;
+    background:var(--line-soft);
+    transition:background .15s ease, width .15s ease;
+  }
+  .resizer::after{
+    content:'';
+    position:absolute;
+    top:50%; left:50%;
+    transform:translate(-50%,-50%);
+    width:4px; height:28px;
+    border-radius:3px;
+    background:var(--text-faint);
+    opacity:.5;
+    transition:opacity .15s ease, background .15s ease;
+  }
+  .resizer:hover::before, .resizer.dragging::before{
+    background:color-mix(in srgb, var(--ember) 55%, var(--line-soft));
+  }
+  .resizer:hover::after, .resizer.dragging::after{
+    background:var(--ember);
+    opacity:1;
+  }
+  .resizer.dragging{ background:color-mix(in srgb, var(--ember) 25%, var(--line)); }
+  body.resizing{ cursor:col-resize; user-select:none; }
+  body.resizing .pane, body.resizing .pane *{ pointer-events:none; }
+
+  @media (max-width: 880px){
+    .resizer{ display:none; }
   }
   .pane-head{
     display:flex; align-items:center; justify-content:space-between;
@@ -332,7 +376,7 @@
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
   @media (max-width: 880px){
-    .workspace{ grid-template-columns:1fr; }
+    .workspace{ grid-template-columns:1fr !important; }
     .url-load input{ width:140px; }
     #searchInput{ width:100%; margin-left:0; }
     .options-bar{ gap:10px; }
@@ -376,6 +420,8 @@
       <div class="drop-hint">Drop file to load</div>
     </div>
   </section>
+
+  <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" aria-label="Resize panels" tabindex="0"></div>
 
   <section class="pane output-pane">
     <div class="pane-head">
@@ -886,6 +932,56 @@
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btnDownload').click(); }
     if (e.key === 'Escape' && document.activeElement === searchInput) { searchInput.value=''; searchInput.dispatchEvent(new Event('input')); }
   });
+
+  // ---------- resizable split ----------
+  (function initResizer(){
+    const resizer = $('#resizer');
+    const workspace = document.querySelector('.workspace');
+    const MIN_PCT = 20, MAX_PCT = 80, DEFAULT_PCT = 50;
+    let pct = DEFAULT_PCT;
+
+    function apply(p){
+      pct = Math.min(MAX_PCT, Math.max(MIN_PCT, p));
+      workspace.style.gridTemplateColumns = `${pct}% 7px ${100 - pct}%`;
+    }
+
+    function pctFromClientX(clientX){
+      const rect = workspace.getBoundingClientRect();
+      return ((clientX - rect.left) / rect.width) * 100;
+    }
+
+    function startDrag(clientX){
+      resizer.classList.add('dragging');
+      document.body.classList.add('resizing');
+      function onMove(e){
+        const x = e.touches ? e.touches[0].clientX : e.clientX;
+        apply(pctFromClientX(x));
+      }
+      function onUp(){
+        resizer.classList.remove('dragging');
+        document.body.classList.remove('resizing');
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+      }
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      window.addEventListener('touchmove', onMove, { passive:false });
+      window.addEventListener('touchend', onUp);
+    }
+
+    resizer.addEventListener('mousedown', (e) => { e.preventDefault(); startDrag(e.clientX); });
+    resizer.addEventListener('touchstart', (e) => { startDrag(e.touches[0].clientX); }, { passive:true });
+    resizer.addEventListener('dblclick', () => apply(DEFAULT_PCT));
+    resizer.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowLeft') { e.preventDefault(); apply(pct - 4); }
+      if (e.key === 'ArrowRight') { e.preventDefault(); apply(pct + 4); }
+      if (e.key === 'Home') { e.preventDefault(); apply(DEFAULT_PCT); }
+    });
+
+    apply(DEFAULT_PCT);
+  })();
 
   // ---------- init ----------
   rawInput.value = JSON.stringify(SAMPLE, null, 2);
