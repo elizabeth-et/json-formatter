@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge — JSON, shaped.</title>
+<meta name="description" content="Paste, upload, or fetch JSON and get it validated, formatted, searched, and exported — entirely in your browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root[data-theme="dark"]{
+    --bg: #11141a;
+    --bg-raised: #171b22;
+    --bg-panel: #1b202a;
+    --bg-inset: #0d1015;
+    --line: #272e3a;
+    --line-soft: #1f2530;
+    --text: #e7e9ee;
+    --text-dim: #9aa3b2;
+    --text-faint: #5d6577;
+    --ember: #ff8a4c;
+    --amber: #e8a33d;
+    --teal: #57bfae;
+    --rose: #e0707f;
+    --violet: #9d8df1;
+    --gold: #d9c46a;
+    --danger: #e0707f;
+    --ok: #57bfae;
+    --shadow: 0 12px 30px -12px rgba(0,0,0,0.55);
+  }
+  :root[data-theme="light"]{
+    --bg: #f3f1ec;
+    --bg-raised: #fbfaf7;
+    --bg-panel: #ffffff;
+    --bg-inset: #ece9e1;
+    --line: #ddd8cc;
+    --line-soft: #e6e2d8;
+    --text: #211f1b;
+    --text-dim: #5d5848;
+    --text-faint: #948f7c;
+    --ember: #d96a2b;
+    --amber: #b6781c;
+    --teal: #157f6e;
+    --rose: #b8475a;
+    --violet: #6e5cc4;
+    --gold: #92781f;
+    --danger: #b8475a;
+    --ok: #157f6e;
+    --shadow: 0 12px 30px -14px rgba(40,30,10,0.25);
+  }
+
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 85% -10%, color-mix(in srgb, var(--ember) 10%, transparent), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Inter',system-ui,sans-serif;
+    display:flex;
+    flex-direction:column;
+    min-height:100vh;
+  }
+  ::selection{ background: color-mix(in srgb, var(--ember) 35%, transparent); }
+
+  button{
+    font-family:'Inter',system-ui,sans-serif;
+    cursor:pointer;
+    border:1px solid var(--line);
+    background:var(--bg-raised);
+    color:var(--text);
+    border-radius:7px;
+    padding:7px 12px;
+    font-size:13px;
+    font-weight:500;
+    transition:border-color .15s ease, transform .1s ease, background .15s ease;
+  }
+  button:hover{ border-color:color-mix(in srgb, var(--ember) 55%, var(--line)); }
+  button:active{ transform:translateY(1px); }
+  button:focus-visible, input:focus-visible, select:focus-visible, .tab:focus-visible{
+    outline:2px solid var(--ember);
+    outline-offset:2px;
+  }
+  button.primary{
+    background: linear-gradient(180deg, color-mix(in srgb, var(--ember) 92%, white), var(--ember));
+    border-color: transparent;
+    color:#1a1208;
+    font-weight:600;
+  }
+  input, select{
+    font-family:'Inter',system-ui,sans-serif;
+    background:var(--bg-inset);
+    border:1px solid var(--line);
+    color:var(--text);
+    border-radius:7px;
+    padding:6px 10px;
+    font-size:13px;
+  }
+
+  /* ---------- Topbar ---------- */
+  .topbar{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:14px 22px;
+    border-bottom:1px solid var(--line);
+    background: color-mix(in srgb, var(--bg-raised) 80%, transparent);
+    backdrop-filter: blur(6px);
+    position:sticky; top:0; z-index:20;
+    flex-wrap:wrap;
+  }
+  .brand{
+    display:flex; align-items:baseline; gap:10px;
+    font-family:'Space Grotesk', sans-serif;
+  }
+  .brand-mark{
+    display:inline-grid; place-items:center;
+    width:30px; height:30px;
+    border-radius:8px;
+    background: linear-gradient(160deg, var(--ember), var(--amber));
+    color:#1a1208; font-weight:700; font-size:16px;
+    box-shadow: var(--shadow);
+  }
+  .brand-name{ font-size:19px; font-weight:700; letter-spacing:-0.01em; }
+  .brand-sub{ font-size:12.5px; color:var(--text-faint); font-weight:500; }
+  .toolbar{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .url-load{ display:flex; gap:6px; }
+  .url-load input{ width:220px; font-family:'JetBrains Mono', monospace; font-size:12px; }
+  .file-btn{
+    display:inline-flex; align-items:center; gap:6px;
+    border:1px solid var(--line); background:var(--bg-raised);
+    border-radius:7px; padding:7px 12px; font-size:13px; font-weight:500;
+  }
+  .file-btn:hover{ border-color:color-mix(in srgb, var(--ember) 55%, var(--line)); }
+  #themeToggle{ width:34px; height:34px; padding:0; display:grid; place-items:center; font-size:15px; }
+
+  /* ---------- Workspace ---------- */
+  .workspace{
+    flex:1;
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:1px;
+    background:var(--line);
+    min-height:0;
+  }
+  .pane{
+    background:var(--bg);
+    display:flex;
+    flex-direction:column;
+    min-height:0;
+  }
+  .pane-head{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line-soft);
+    gap:10px; flex-wrap:wrap;
+  }
+  .pane-title{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:12.5px; font-weight:600;
+    text-transform:uppercase; letter-spacing:.07em;
+    color:var(--text-dim);
+  }
+  .pane-actions{ display:flex; gap:8px; }
+  .pane-actions button{ font-size:12px; padding:6px 10px; }
+
+  .tabs{ display:flex; gap:4px; background:var(--bg-inset); padding:3px; border-radius:9px; }
+  .tab{
+    border:none; background:transparent; color:var(--text-dim);
+    padding:6px 13px; border-radius:7px; font-size:12.5px; font-weight:600;
+    font-family:'Space Grotesk', sans-serif; letter-spacing:.02em;
+  }
+  .tab.active{ background:var(--bg-panel); color:var(--text); box-shadow:var(--shadow); }
+  .tab:hover:not(.active){ color:var(--text); }
+
+  /* ---------- Input pane ---------- */
+  .editor-wrap{
+    position:relative;
+    flex:1; min-height:0;
+    display:flex;
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    line-height:21px;
+  }
+  .editor-wrap.drag-over{ outline:2px dashed var(--ember); outline-offset:-6px; }
+  .line-numbers{
+    user-select:none;
+    text-align:right;
+    padding:14px 10px 14px 14px;
+    color:var(--text-faint);
+    background:var(--bg-inset);
+    border-right:1px solid var(--line-soft);
+    white-space:pre;
+    overflow:hidden;
+    min-width:46px;
+  }
+  textarea#rawInput{
+    flex:1;
+    resize:none;
+    border:none;
+    outline:none;
+    background:var(--bg);
+    color:var(--text);
+    padding:14px 16px;
+    font-family:inherit;
+    font-size:inherit;
+    line-height:inherit;
+    tab-size:2;
+  }
+  .drop-hint{
+    position:absolute; inset:0;
+    display:none;
+    align-items:center; justify-content:center;
+    background:color-mix(in srgb, var(--bg) 75%, transparent);
+    color:var(--ember);
+    font-weight:600;
+    font-family:'Space Grotesk',sans-serif;
+    pointer-events:none;
+  }
+  .editor-wrap.drag-over .drop-hint{ display:flex; }
+
+  /* ---------- Output pane ---------- */
+  .options-bar{
+    display:flex; align-items:center; gap:16px;
+    padding:9px 14px;
+    border-bottom:1px solid var(--line-soft);
+    flex-wrap:wrap;
+    font-size:12.5px;
+    color:var(--text-dim);
+  }
+  .options-bar label{ display:flex; align-items:center; gap:6px; }
+  .options-bar select{ font-size:12px; padding:5px 8px; }
+  .checkbox{ user-select:none; }
+  #searchInput{ margin-left:auto; width:180px; font-family:'JetBrains Mono', monospace; }
+
+  .view{ flex:1; min-height:0; overflow:auto; display:none; }
+  .view.active{ display:block; }
+
+  /* formatted code view */
+  #formattedView{
+    font-family:'JetBrains Mono', monospace;
+    font-size:13px;
+    line-height:21px;
+  }
+  .code-line{
+    display:flex;
+    white-space:pre;
+    border-left:3px solid transparent;
+    padding-left:9px;
+  }
+  .code-line .gutter{
+    user-select:none;
+    color:var(--text-faint);
+    width:42px;
+    flex:none;
+    text-align:right;
+    margin-right:14px;
+  }
+  .code-line.match{ background:color-mix(in srgb, var(--gold) 16%, transparent); }
+  .str{ color:var(--teal); }
+  .key{ color:var(--amber); }
+  .num{ color:var(--violet); }
+  .bool{ color:var(--ember); }
+  .null{ color:var(--text-faint); font-style:italic; }
+  .punc{ color:var(--text-dim); }
+
+  /* tree view */
+  #treeView{ padding:14px 16px; font-family:'JetBrains Mono', monospace; font-size:13px; }
+  .tree-toolbar{ display:flex; gap:8px; margin-bottom:10px; }
+  .tree-toolbar button{ font-size:12px; padding:5px 9px; }
+  details.node{ margin-left:16px; }
+  details.node > summary{
+    cursor:pointer; list-style:none; padding:2px 0;
+    display:flex; align-items:baseline; gap:6px;
+  }
+  details.node > summary::-webkit-details-marker{ display:none; }
+  details.node > summary::before{
+    content:'▸'; display:inline-block; color:var(--text-faint);
+    transition:transform .12s ease; width:10px;
+  }
+  details.node[open] > summary::before{ transform:rotate(90deg); }
+  .leaf{ margin-left:16px; padding:2px 0; display:flex; gap:6px; align-items:baseline; }
+  .tkey{ color:var(--amber); cursor:pointer; border-radius:4px; }
+  .tkey:hover{ background:color-mix(in srgb, var(--amber) 18%, transparent); }
+  .tcount{ color:var(--text-faint); font-size:11.5px; }
+  .tval-str{ color:var(--teal); }
+  .tval-num{ color:var(--violet); }
+  .tval-bool{ color:var(--ember); }
+  .tval-null{ color:var(--text-faint); font-style:italic; }
+
+  /* stats view */
+  #statsView{ padding:18px 20px; font-family:'Inter',sans-serif; }
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:12px; margin-bottom:22px; }
+  .stat-card{
+    background:var(--bg-panel); border:1px solid var(--line-soft);
+    border-radius:10px; padding:14px 16px;
+  }
+  .stat-card .num{ font-family:'Space Grotesk',sans-serif; font-size:24px; font-weight:700; color:var(--text); display:block; }
+  .stat-card .label{ font-size:11.5px; color:var(--text-faint); text-transform:uppercase; letter-spacing:.06em; }
+  .type-row{ display:grid; grid-template-columns:90px 1fr 40px; align-items:center; gap:10px; margin-bottom:8px; font-size:12.5px; }
+  .type-bar-track{ background:var(--bg-inset); border-radius:5px; height:9px; overflow:hidden; }
+  .type-bar-fill{ height:100%; border-radius:5px; }
+  .section-label{ font-family:'Space Grotesk',sans-serif; font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.07em; color:var(--text-dim); margin:0 0 12px; }
+
+  /* status bar */
+  .statusbar{
+    display:flex; align-items:center; gap:18px;
+    padding:8px 18px;
+    border-top:1px solid var(--line);
+    background:var(--bg-raised);
+    font-size:12px;
+    color:var(--text-dim);
+    font-family:'JetBrains Mono', monospace;
+  }
+  .status{ display:flex; align-items:center; gap:6px; font-weight:600; }
+  .status::before{ content:''; width:7px; height:7px; border-radius:50%; background:currentColor; }
+  .status.ok{ color:var(--ok); }
+  .status.error{ color:var(--danger); }
+  .statusbar .spacer{ flex:1; }
+
+  .toast{
+    position:fixed; bottom:20px; left:50%; transform:translateX(-50%) translateY(20px);
+    background:var(--bg-panel); border:1px solid var(--line);
+    color:var(--text); padding:10px 18px; border-radius:9px;
+    font-size:13px; font-weight:500; box-shadow:var(--shadow);
+    opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease;
+    z-index:50;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  @media (max-width: 880px){
+    .workspace{ grid-template-columns:1fr; }
+    .url-load input{ width:140px; }
+    #searchInput{ width:100%; margin-left:0; }
+    .options-bar{ gap:10px; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ transition:none !important; animation:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">⌁</span>
+    <span class="brand-name">Forge</span>
+    <span class="brand-sub">JSON, shaped.</span>
+  </div>
+  <div class="toolbar">
+    <button id="btnSample">Load sample</button>
+    <label class="file-btn">Upload file<input type="file" id="fileInput" accept=".json,application/json,text/plain" hidden></label>
+    <div class="url-load">
+      <input id="urlInput" type="text" placeholder="https://…/data.json" aria-label="URL to fetch JSON from">
+      <button id="btnLoadUrl">Fetch</button>
+    </div>
+    <button id="themeToggle" aria-label="Toggle light and dark theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+
+<main class="workspace">
+  <section class="pane input-pane">
+    <div class="pane-head">
+      <span class="pane-title">Raw input</span>
+      <div class="pane-actions">
+        <button id="btnClear">Clear</button>
+      </div>
+    </div>
+    <div class="editor-wrap" id="dropZone">
+      <div class="line-numbers" id="lineNumbers">1</div>
+      <textarea id="rawInput" spellcheck="false" placeholder="Paste JSON here, drop a .json file anywhere in this panel, or fetch one from a URL above…"></textarea>
+      <div class="drop-hint">Drop file to load</div>
+    </div>
+  </section>
+
+  <section class="pane output-pane">
+    <div class="pane-head">
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="formatted">Formatted</button>
+        <button class="tab" data-tab="tree">Tree</button>
+        <button class="tab" data-tab="stats">Stats</button>
+      </div>
+      <div class="pane-actions">
+        <button id="btnCopy">Copy</button>
+        <button id="btnDownload" class="primary">Download</button>
+      </div>
+    </div>
+
+    <div class="options-bar">
+      <label>Indent
+        <select id="indentSelect">
+          <option value="2" selected>2 spaces</option>
+          <option value="4">4 spaces</option>
+          <option value="tab">Tab</option>
+          <option value="0">Minified</option>
+        </select>
+      </label>
+      <label class="checkbox"><input type="checkbox" id="sortKeys"> Sort keys</label>
+      <label class="checkbox"><input type="checkbox" id="escapeMode"> Input is an escaped JSON string</label>
+      <input id="searchInput" type="search" placeholder="Filter keys / values…" aria-label="Search JSON">
+    </div>
+
+    <div class="view formatted-view active" id="formattedView"></div>
+
+    <div class="view tree-view" id="treeView">
+      <div class="tree-toolbar">
+        <button id="btnExpandAll">Expand all</button>
+        <button id="btnCollapseAll">Collapse all</button>
+      </div>
+      <div id="treeRoot"></div>
+    </div>
+
+    <div class="view stats-view" id="statsView"></div>
+  </section>
+</main>
+
+<footer class="statusbar">
+  <span id="statusMsg" class="status ok">Ready</span>
+  <span class="spacer"></span>
+  <span id="statSize"></span>
+  <span id="statLines"></span>
+  <span id="statKeys"></span>
+  <span id="statDepth"></span>
+</footer>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  "use strict";
+
+  const $ = (sel) => document.querySelector(sel);
+  const rawInput = $('#rawInput');
+  const lineNumbers = $('#lineNumbers');
+  const dropZone = $('#dropZone');
+  const fileInput = $('#fileInput');
+  const urlInput = $('#urlInput');
+  const indentSelect = $('#indentSelect');
+  const sortKeysBox = $('#sortKeys');
+  const escapeModeBox = $('#escapeMode');
+  const searchInput = $('#searchInput');
+  const formattedView = $('#formattedView');
+  const treeRoot = $('#treeRoot');
+  const statsView = $('#statsView');
+  const statusMsg = $('#statusMsg');
+  const statSize = $('#statSize');
+  const statLines = $('#statLines');
+  const statKeys = $('#statKeys');
+  const statDepth = $('#statDepth');
+  const toast = $('#toast');
+
+  const DEPTH_COLORS = ['var(--ember)','var(--amber)','var(--teal)','var(--violet)','var(--rose)','var(--gold)'];
+
+  let currentValue = null;       // parsed JS value
+  let currentFormatted = '';     // pretty / minified text, ready to copy or download
+  let lastValidText = '';
+
+  // ---------- helpers ----------
+  function showToast(msg){
+    toast.textContent = msg;
+    toast.classList.add('show');
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove('show'), 1800);
+  }
+
+  function escapeHtml(s){
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function debounce(fn, ms){
+    let t;
+    return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+  }
+
+  function updateLineNumbers(){
+    const lines = rawInput.value.split('\n').length;
+    let out = '';
+    for (let i = 1; i <= lines; i++) out += i + '\n';
+    lineNumbers.textContent = out;
+    lineNumbers.scrollTop = rawInput.scrollTop;
+  }
+  rawInput.addEventListener('scroll', () => { lineNumbers.scrollTop = rawInput.scrollTop; });
+
+  function locateError(text, message){
+    let pos = -1;
+    const m = /position (\d+)/.exec(message);
+    if (m) pos = parseInt(m[1], 10);
+    if (pos < 0) {
+      const m2 = /line (\d+) column (\d+)/.exec(message);
+      if (m2) return { line: parseInt(m2[1],10), col: parseInt(m2[2],10) };
+      return null;
+    }
+    let line = 1, col = 1;
+    for (let i = 0; i < pos && i < text.length; i++) {
+      if (text[i] === '\n') { line++; col = 1; } else { col++; }
+    }
+    return { line, col };
+  }
+
+  function deepSort(value){
+    if (Array.isArray(value)) return value.map(deepSort);
+    if (value && typeof value === 'object') {
+      const out = {};
+      Object.keys(value).sort((a,b)=>a.localeCompare(b)).forEach(k => out[k] = deepSort(value[k]));
+      return out;
+    }
+    return value;
+  }
+
+  function computeStats(value){
+    let keys = 0, maxDepth = 0;
+    const typeCounts = { string:0, number:0, boolean:0, null:0, array:0, object:0 };
+    function walk(v, depth){
+      maxDepth = Math.max(maxDepth, depth);
+      if (Array.isArray(v)) {
+        typeCounts.array++;
+        v.forEach(item => walk(item, depth+1));
+      } else if (v !== null && typeof v === 'object') {
+        typeCounts.object++;
+        const ks = Object.keys(v);
+        keys += ks.length;
+        ks.forEach(k => walk(v[k], depth+1));
+      } else if (v === null) {
+        typeCounts.null++;
+      } else if (typeof v === 'string') {
+        typeCounts.string++;
+      } else if (typeof v === 'number') {
+        typeCounts.number++;
+      } else if (typeof v === 'boolean') {
+        typeCounts.boolean++;
+      }
+    }
+    walk(value, 0);
+    return { keys, maxDepth, typeCounts };
+  }
+
+  // ---------- formatted / syntax highlighted view ----------
+  function syntaxTokenize(line){
+    const re = /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false)\b|\bnull\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+    return line.replace(re, (match) => {
+      let cls = 'num';
+      if (/^"/.test(match)) cls = /:\s*$/.test(match) ? 'key' : 'str';
+      else if (/true|false/.test(match)) cls = 'bool';
+      else if (/null/.test(match)) cls = 'null';
+      return `<span class="${cls}">${match}</span>`;
+    }).replace(/([{}\[\],])/g, '<span class="punc">$1</span>');
+  }
+
+  function indentDepthOf(line, indentUnit){
+    if (indentUnit === 'tab') {
+      let i = 0; while (line[i] === '\t') i++; return i;
+    }
+    const spaces = line.match(/^ */)[0].length;
+    return indentUnit > 0 ? Math.floor(spaces / indentUnit) : 0;
+  }
+
+  function renderFormatted(text, indentUnit, query){
+    const lines = text.split('\n');
+    const q = (query || '').trim().toLowerCase();
+    let html = '';
+    lines.forEach((raw, idx) => {
+      const escaped = escapeHtml(raw);
+      const tokenized = syntaxTokenize(escaped);
+      const depth = indentDepthOf(raw, indentUnit);
+      const color = DEPTH_COLORS[depth % DEPTH_COLORS.length];
+      const isMatch = q && raw.toLowerCase().includes(q);
+      html += `<div class="code-line${isMatch ? ' match':''}" style="border-left-color:${depth ? color : 'transparent'}">` +
+              `<span class="gutter">${idx+1}</span><span>${tokenized || '&nbsp;'}</span></div>`;
+    });
+    formattedView.innerHTML = html;
+  }
+
+  // ---------- tree view ----------
+  function pathSegment(seg){
+    return /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(seg) ? '.' + seg : `[${JSON.stringify(seg)}]`;
+  }
+
+  function buildTree(value, container, path, query){
+    const q = (query || '').trim().toLowerCase();
+
+    function matches(key, val){
+      if (!q) return true;
+      if (String(key).toLowerCase().includes(q)) return true;
+      if (val !== null && typeof val !== 'object' && String(val).toLowerCase().includes(q)) return true;
+      return false;
+    }
+
+    function makeKeySpan(label, fullPath){
+      const span = document.createElement('span');
+      span.className = 'tkey';
+      span.textContent = label;
+      span.title = 'Click to copy path: ' + fullPath;
+      span.addEventListener('click', (e) => {
+        e.stopPropagation();
+        navigator.clipboard.writeText(fullPath).then(() => showToast('Path copied: ' + fullPath));
+      });
+      return span;
+    }
+
+    function renderValueInline(v){
+      if (v === null) { const s = document.createElement('span'); s.className='tval-null'; s.textContent='null'; return s; }
+      const t = typeof v;
+      const s = document.createElement('span');
+      if (t === 'string') { s.className = 'tval-str'; s.textContent = JSON.stringify(v); }
+      else if (t === 'number') { s.className = 'tval-num'; s.textContent = String(v); }
+      else if (t === 'boolean') { s.className = 'tval-bool'; s.textContent = String(v); }
+      return s;
+    }
+
+    function renderNode(key, val, fullPath, parent, isRoot){
+      if (val !== null && typeof val === 'object') {
+        const isArr = Array.isArray(val);
+        const entries = isArr ? val.map((v,i)=>[i,v]) : Object.entries(val);
+        // filter for search: keep node if itself matches or any descendant matches
+        function anyMatch(k,v){
+          if (matches(k,v)) return true;
+          if (v !== null && typeof v === 'object') {
+            const ents = Array.isArray(v) ? v.map((x,i)=>[i,x]) : Object.entries(v);
+            return ents.some(([k2,v2]) => anyMatch(k2,v2));
+          }
+          return false;
+        }
+        if (q && !isRoot && !anyMatch(key, val)) return;
+
+        const details = document.createElement('details');
+        details.className = 'node';
+        if (q || entries.length <= 30) details.open = true;
+        const summary = document.createElement('summary');
+        if (!isRoot) summary.appendChild(makeKeySpan(String(key) + ':', fullPath));
+        const bracket = document.createElement('span');
+        bracket.className = 'tcount';
+        bracket.textContent = (isArr ? `Array(${entries.length})` : `Object{${entries.length}}`);
+        summary.appendChild(bracket);
+        details.appendChild(summary);
+        parent.appendChild(details);
+        entries.forEach(([k,v]) => {
+          const childPath = fullPath + (isArr ? `[${k}]` : pathSegment(String(k)));
+          renderNode(k, v, childPath, details, false);
+        });
+      } else {
+        if (q && !matches(key, val)) return;
+        const row = document.createElement('div');
+        row.className = 'leaf';
+        row.appendChild(makeKeySpan(String(key) + ':', fullPath));
+        row.appendChild(renderValueInline(val));
+        parent.appendChild(row);
+      }
+    }
+
+    container.innerHTML = '';
+    renderNode('root', value, 'root', container, true);
+  }
+
+  // ---------- stats view ----------
+  function renderStats(value, formattedText){
+    const { keys, maxDepth, typeCounts } = computeStats(value);
+    const bytes = new Blob([formattedText]).size;
+    const sizeLabel = bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes/1024).toFixed(1)} KB` : `${(bytes/1048576).toFixed(2)} MB`;
+    const total = Object.values(typeCounts).reduce((a,b)=>a+b,0) || 1;
+    const colors = { string:'var(--teal)', number:'var(--violet)', boolean:'var(--ember)', null:'var(--text-faint)', array:'var(--amber)', object:'var(--rose)' };
+
+    let typeRows = '';
+    Object.entries(typeCounts).forEach(([type, count]) => {
+      const pct = Math.round((count/total)*100);
+      typeRows += `<div class="type-row">
+        <span>${type}</span>
+        <div class="type-bar-track"><div class="type-bar-fill" style="width:${pct}%;background:${colors[type]}"></div></div>
+        <span>${count}</span>
+      </div>`;
+    });
+
+    statsView.innerHTML = `
+      <p class="section-label">Overview</p>
+      <div class="stat-grid">
+        <div class="stat-card"><span class="num">${sizeLabel}</span><span class="label">Size</span></div>
+        <div class="stat-card"><span class="num">${formattedText.split('\n').length}</span><span class="label">Lines</span></div>
+        <div class="stat-card"><span class="num">${keys}</span><span class="label">Total keys</span></div>
+        <div class="stat-card"><span class="num">${maxDepth}</span><span class="label">Max depth</span></div>
+      </div>
+      <p class="section-label">Value types</p>
+      ${typeRows}
+    `;
+
+    statSize.textContent = sizeLabel;
+    statLines.textContent = formattedText.split('\n').length + ' lines';
+    statKeys.textContent = keys + ' keys';
+    statDepth.textContent = 'depth ' + maxDepth;
+  }
+
+  // ---------- main pipeline ----------
+  function getIndentUnit(){
+    const v = indentSelect.value;
+    if (v === 'tab') return 'tab';
+    return parseInt(v, 10);
+  }
+
+  function process(){
+    updateLineNumbers();
+    let text = rawInput.value;
+
+    if (!text.trim()) {
+      formattedView.innerHTML = '';
+      treeRoot.innerHTML = '';
+      statsView.innerHTML = '';
+      statusMsg.textContent = 'Ready';
+      statusMsg.className = 'status ok';
+      statSize.textContent = ''; statLines.textContent = ''; statKeys.textContent=''; statDepth.textContent='';
+      currentValue = null; currentFormatted = '';
+      return;
+    }
+
+    try {
+      let parseTarget = text;
+      if (escapeModeBox.checked) {
+        const asString = JSON.parse(text);
+        if (typeof asString !== 'string') throw new Error('Input did not parse to a string');
+        parseTarget = asString;
+      }
+      let value = JSON.parse(parseTarget);
+      if (sortKeysBox.checked) value = deepSort(value);
+      currentValue = value;
+
+      const indentUnit = getIndentUnit();
+      let formatted;
+      if (indentUnit === 0) {
+        formatted = JSON.stringify(value);
+      } else if (indentUnit === 'tab') {
+        formatted = JSON.stringify(value, null, '\t');
+      } else {
+        formatted = JSON.stringify(value, null, indentUnit);
+      }
+      currentFormatted = formatted;
+      lastValidText = text;
+
+      renderFormatted(formatted, indentUnit, searchInput.value);
+      buildTree(value, treeRoot, 'root', searchInput.value);
+      renderStats(value, formatted);
+
+      statusMsg.textContent = 'Valid JSON';
+      statusMsg.className = 'status ok';
+    } catch (err) {
+      const loc = locateError(text, err.message);
+      statusMsg.textContent = loc ? `Error at line ${loc.line}, column ${loc.col}` : ('Error: ' + err.message);
+      statusMsg.className = 'status error';
+      formattedView.innerHTML = `<div style="padding:16px;color:var(--danger);font-family:'JetBrains Mono',monospace;font-size:13px;">${escapeHtml(err.message)}</div>`;
+      treeRoot.innerHTML = '';
+      statsView.innerHTML = '';
+      statSize.textContent=''; statLines.textContent=''; statKeys.textContent=''; statDepth.textContent='';
+      currentValue = null; currentFormatted = '';
+    }
+  }
+
+  const debouncedProcess = debounce(process, 220);
+  rawInput.addEventListener('input', debouncedProcess);
+  indentSelect.addEventListener('change', process);
+  sortKeysBox.addEventListener('change', process);
+  escapeModeBox.addEventListener('change', process);
+  searchInput.addEventListener('input', debounce(() => {
+    renderFormatted(currentFormatted || '', getIndentUnit(), searchInput.value);
+    if (currentValue !== null) buildTree(currentValue, treeRoot, 'root', searchInput.value);
+  }, 150));
+
+  // ---------- tabs ----------
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(tab.dataset.tab + 'View').classList.add('active');
+    });
+  });
+
+  // ---------- copy / download ----------
+  $('#btnCopy').addEventListener('click', () => {
+    if (!currentFormatted) { showToast('Nothing to copy yet'); return; }
+    navigator.clipboard.writeText(currentFormatted).then(() => showToast('Copied to clipboard'));
+  });
+
+  $('#btnDownload').addEventListener('click', () => {
+    if (!currentFormatted) { showToast('Nothing to download yet'); return; }
+    const blob = new Blob([currentFormatted], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'formatted.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Download started');
+  });
+
+  // ---------- clear ----------
+  $('#btnClear').addEventListener('click', () => {
+    rawInput.value = '';
+    process();
+    rawInput.focus();
+  });
+
+  // ---------- tree expand/collapse ----------
+  $('#btnExpandAll').addEventListener('click', () => {
+    treeRoot.querySelectorAll('details.node').forEach(d => d.open = true);
+  });
+  $('#btnCollapseAll').addEventListener('click', () => {
+    treeRoot.querySelectorAll('details.node').forEach(d => d.open = false);
+  });
+
+  // ---------- file upload + drag/drop ----------
+  function loadFile(file){
+    const reader = new FileReader();
+    reader.onload = () => {
+      rawInput.value = reader.result;
+      process();
+      showToast('Loaded ' + file.name);
+    };
+    reader.onerror = () => showToast('Could not read that file');
+    reader.readAsText(file);
+  }
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files[0]) loadFile(e.target.files[0]);
+  });
+  ['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropZone.classList.add('drag-over');
+  }));
+  ['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, (e) => {
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+  }));
+  dropZone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) loadFile(file);
+  });
+
+  // ---------- load from URL ----------
+  $('#btnLoadUrl').addEventListener('click', async () => {
+    const url = urlInput.value.trim();
+    if (!url) { showToast('Enter a URL first'); return; }
+    statusMsg.textContent = 'Fetching…';
+    statusMsg.className = 'status ok';
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      rawInput.value = text;
+      process();
+      showToast('Loaded from URL');
+    } catch (err) {
+      statusMsg.textContent = 'Fetch failed (likely CORS or network)';
+      statusMsg.className = 'status error';
+      showToast('Could not fetch that URL');
+    }
+  });
+
+  // ---------- sample ----------
+  const SAMPLE = {
+    project: "Forge",
+    version: 1.4,
+    active: true,
+    owner: { name: "Ada Lóvelace", role: "maintainer", contact: null },
+    contributors: ["nyx", "tomasz", "iris"],
+    metrics: { stars: 482, forks: 37, issues: { open: 5, closed: 112 } },
+    tags: ["json", "formatter", "developer-tools"],
+    deprecated: false
+  };
+  $('#btnSample').addEventListener('click', () => {
+    rawInput.value = JSON.stringify(SAMPLE);
+    process();
+  });
+
+  // ---------- theme ----------
+  const themeBtn = $('#themeToggle');
+  themeBtn.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    themeBtn.textContent = next === 'dark' ? '◐' : '◑';
+  });
+
+  // ---------- keyboard shortcuts ----------
+  document.addEventListener('keydown', (e) => {
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod && e.key === 'Enter') { e.preventDefault(); process(); }
+    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); $('#btnDownload').click(); }
+    if (e.key === 'Escape' && document.activeElement === searchInput) { searchInput.value=''; searchInput.dispatchEvent(new Event('input')); }
+  });
+
+  // ---------- init ----------
+  rawInput.value = JSON.stringify(SAMPLE, null, 2);
+  process();
+})();
+</script>
+</body>
+</html>
